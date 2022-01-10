@@ -4,13 +4,6 @@ author: Findlay Bewicke-Copley PhD
 output: html_notebook
 ---
 
-##TODO
-
-Randomised
-
-Merge all paitents
-
-
 ```{r setup, echo=FALSE}
 # Packages to load
 packages<- c("tidyverse", "patchwork", "Biobase","limma","pamr","survival",
