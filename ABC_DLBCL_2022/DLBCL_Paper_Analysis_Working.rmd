@@ -397,15 +397,15 @@ ABC_GSEA %>% subset(FDR.q.val < 0.1) %>% arrange(- NES) %>% droplevels.data.fram
 GCB_GSEA %>% subset(FDR.q.val < 0.1) %>% arrange(- NES) %>% droplevels.data.frame() %>%
         write.xlsx("GSEA/SigPathways.xlsx", sheetName="GCB", append=TRUE)
 ## Venn diagram of enriched gene sets
-GSEA_Up_Venn <- ggvenn::ggvenn(list("ABC" = c(ABC_GSEA %>% subset(FDR.q.val <= 0.05 & NES > 0) %>% droplevels.data.frame() %>% .[,"NAME"]),
-                                    "GCB" = c(GCB_GSEA %>% subset(FDR.q.val <= 0.05 & NES > 0) %>% droplevels.data.frame() %>% .[,"NAME"])),
+GSEA_Up_Venn <- ggvenn::ggvenn(list("ABC" = c(ABC_GSEA %>% subset(FDR.q.val <= 0.1 & NES > 0) %>% droplevels.data.frame() %>% .[,"NAME"]),
+                                    "GCB" = c(GCB_GSEA %>% subset(FDR.q.val <= 0.1 & NES > 0) %>% droplevels.data.frame() %>% .[,"NAME"])),
                                fill_color = c("#5b9bd5","#ed7d31"), 
                                fill_alpha = 0.3,
                                stroke_color = "grey",
                                show_percentage = FALSE) +
         labs(title="Enriched at relapse")
-GSEA_Down_Venn <- ggvenn::ggvenn(list("ABC" = c(ABC_GSEA %>% subset(FDR.q.val <= 0.05 & NES < 0) %>% droplevels.data.frame() %>% .[,"NAME"]),
-                                      "GCB" = c(GCB_GSEA %>% subset(FDR.q.val <= 0.05 & NES < 0) %>% droplevels.data.frame() %>% .[,"NAME"])),
+GSEA_Down_Venn <- ggvenn::ggvenn(list("ABC" = c(ABC_GSEA %>% subset(FDR.q.val <= 0.1 & NES < 0) %>% droplevels.data.frame() %>% .[,"NAME"]),
+                                      "GCB" = c(GCB_GSEA %>% subset(FDR.q.val <= 0.1 & NES < 0) %>% droplevels.data.frame() %>% .[,"NAME"])),
                                  fill_color = c("#5b9bd5","#ed7d31"), 
                                  fill_alpha = 0.3, 
                                  stroke_color = "grey",
