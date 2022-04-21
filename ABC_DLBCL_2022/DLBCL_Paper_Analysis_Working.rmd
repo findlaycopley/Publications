@@ -4,6 +4,13 @@ author: Findlay Bewicke-Copley PhD
 output: html_notebook
 ---
 
+##TODO
+
+Randomised
+
+Merge all paitents
+
+
 ```{r setup, echo=FALSE}
 # Packages to load
 packages<- c("tidyverse", "patchwork", "Biobase","limma","pamr","survival",
@@ -79,8 +86,38 @@ These data were put together in the DLBCL_Paired_Relapse_Data_Creation.Rmd noteb
 Data <- list()
 ## This has been slightly updated
 Data$PairsData <- readRDS("RDS/rrDLBCL.batchCorrected.eSet.rds")
+
+Discord <- pData(Data$PairsData) %>%
+    pivot_wider(id_cols = PatID, names_from = Timepoint, values_from = COO) %>%
+    subset(Diagnosis != Relapse)
+
+
+pData(Data$PairsData) %>% 
+    subset(PatID %in% Discord$PatID) %>%
+    pivot_wider(id_cols = PatID, names_from = Timepoint, values_from = Nodal)
+
+
+
 pData(Data$PairsData)
-summary(Data$PairsData$Relapse_Time)
+summary(Data$PairsData$Relapse_Time) 
+pData(Data$PairsData) %>%
+    pivot_wider(PatID, names_from = Timepoint, values_from = Nodal) %>%
+    column_to_rownames("PatID") %>%
+    table()
+
+table(pData(Data$PairsData) %>%
+    subset(Timepoint == "Diagnosis") %>%
+    .$TREATMENT)
+## Output for GEO
+dir.create("DataStore")
+Data$PairsData %>% exprs() %>% write.table("DataStore/all_batchCorrectedCounts.txt", sep = "\t", quote = FALSE, col.names = NA)
+raw <- readRDS("RDS/rrDLBCL.raw.eSet.rds")
+raw %>% exprs() %>% write.table("DataStore/all_rawCounts.txt", sep = "\t", quote = FALSE, col.names = NA)
+lapply(colnames(raw), function(col) {
+    raw[,col] %>% exprs() %>% write.table(paste("DataStore/", col, "_rawCounts.txt", sep = ""), sep = "\t", quote = FALSE, col.names = NA)
+})
+
+raw[12134,24] %>% exprs()
 
 ```
 
@@ -135,7 +172,7 @@ Cohort <- rbind(cbind(pData(Data$PairsData)["Timepoint"],"Timepoint") %>%
                 cbind(pData(Data$PairsData)["COO"],"COO") %>% 
                     setNames(c("val", "yaxis")) %>% 
                     rownames_to_column(var="sample"),
-                cbind(ifelse(pData(Data$PairsData)["Relapse_Time"] > 2,"<2y",">2y"),"Relapse Time") %>% as.data.frame() %>%
+                cbind(ifelse(pData(Data$PairsData)["Relapse_Time"] < 2,"<2y",">2y"),"Relapse Time") %>% as.data.frame() %>%
                     setNames(c("val", "yaxis")) %>%
                     rownames_to_column(var="sample"),
                 cbind(pData(Data$PairsData)["Response"],"Response") %>% 
@@ -338,6 +375,8 @@ PCA_COO <- biplot(pca,
 PCA <- (PCA_Timepoint + PCA_COO )
 ```
 
+
+
 ## GSEA Venn Diagrams from DEG
 
 ```{r}
@@ -419,6 +458,7 @@ GSEA_Down_Venn <- ggvenn::ggvenn(list("ABC" = c(ABC_GSEA %>% subset(FDR.q.val <=
 
 ```{r}
 GSEA <- read.xlsx("GSEA/rrDLBCL_pairs_GSEA.xlsx", sheetName = "For Alex")
+subset(GSEA, FDR.q.val.ABC <= 0.1 & FDR.q.val.GCB <= 0.1 & sign(NES.ABC) == sign(NES.GCB))
 ## chromosome maintenance, DNA repair, and rRNA processing 
 ABC_GSEA <- subset(GSEA, NAME %in% c(
         "REACTOME_DNA_METHYLATION",
@@ -694,6 +734,19 @@ Sup1E <- ggvenn::ggvenn(list(ABC = subset(ABC_FoldChange, P.Value <= 0.05) %>% r
                         show_percentage = FALSE)
 Sup1F1 <- Volcano::volcanoPlot(ABC_FoldChange, SigName = "P.Value", FCName = "logFC", fcThres = 2, pThres = 0.01, PRINT = FALSE)
 Sup1F2 <- Volcano::volcanoPlot(GCB_FoldChange, SigName = "P.Value", FCName = "logFC", fcThres = 2, pThres = 0.01, PRINT = FALSE)
+
+Genes  <- c(ABC_FoldChange %>% subset(P.Value <= 0.05) %>% rownames(), 
+            GCB_FoldChange %>% subset(P.Value <= 0.05) %>% rownames()) %>% unique()
+length(Genes)
+cbind(Gene = Genes,
+      ABC = ABC_FoldChange %>% .[Genes,"logFC"],
+      GCB = GCB_FoldChange %>% .[Genes,"logFC"]) %>%
+    as.data.frame() %>%
+    ggplot(aes(x = as.numeric(ABC), y = as.numeric(GCB))) + 
+    geom_point() + 
+    geom_smooth(method = "lm", linetype = "dashed", col = "red", ) + 
+    stat_cor()
+
 ## G
 Sup1G <- ggvenn::ggvenn(list(ABC = subset(ABC_FoldChange, P.Value <= 0.01 & abs(logFC) > 1) %>% row.names(),
                              GCB = subset(GCB_FoldChange, P.Value <= 0.01 & abs(logFC) > 1) %>% row.names()),
@@ -712,6 +765,8 @@ Predictor <- names(betas)
 REMoDLB <- readRDS("RDS/ExternalDataset/REMoDLB.Processed.ABC.rds")
 HMRN <- readRDS("RDS/ExternalDataset/HMRN.Processed.rds")
 LLMPP <- readRDS("RDS/ExternalDataset/LLMPP.Processed.ABC.RCHOP.rds")
+
+pData(LLMPP)
 ```
 
 ## Generating Z score predictors
