@@ -562,7 +562,6 @@ REDDY$ABC <- REDDY$Data[fData(REDDY$Data)$external_gene_name %in%
 data=list(x=exprs(REDDY$ABC), 
           ## Survival Time (Years)
           survival.time=REDDY$ABC$OS_TIME,
-          ## Censoring Status (Dead = 1 Alive = 0 (is this right?))
           censoring.status=REDDY$ABC$OS_IND,
           geneid=fData(REDDY$ABC)$external_gene_name)
 ## train pamr
