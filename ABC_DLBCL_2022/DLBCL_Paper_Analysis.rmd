@@ -371,7 +371,7 @@ PCA <- (PCA_Timepoint + PCA_COO )
 ## GSEA Venn Diagrams from DEG
 
 ```{r}
-ABC <- Data$PairsData[,Data$PairsData$COO == "ABC"]
+ABC <- Data$PairsData[,Data$PairsData$PairCOO == "ABC"]
 ## Build the design, with diagnosis as the intercept.
 ## Pair samples by PatID in the design
 ## Then assess the differences at relapse (Timepoint)
@@ -383,7 +383,7 @@ ABC_FoldChange <- topTable(ABC_fit,
                            n=Inf,
                            coef=ncol(ABC_design))
 ## GCB analysis
-GCB <- Data$PairsData[,Data$PairsData$COO == "GCB"]
+GCB <- Data$PairsData[,Data$PairsData$PairCOO == "GCB"]
 ## Build the design, with diagnosis as the intercept.
 ## Pair samples by PatID in the design
 ## Then assess the differences at relapse (Timepoint)
