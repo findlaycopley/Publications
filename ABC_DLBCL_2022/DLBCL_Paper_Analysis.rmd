@@ -420,11 +420,11 @@ ABC_GSEA <- rbind(read.delim("GSEA/ABC_t/gsea_report_for_na_pos_1581443460638.xl
                   read.delim("GSEA/ABC_t/gsea_report_for_na_neg_1581443460638.xls"))
 GCB_GSEA <- rbind(read.delim("GSEA/GCB_t/gsea_report_for_na_pos_1581443631166.xls"),
                   read.delim("GSEA/GCB_t/gsea_report_for_na_neg_1581443631166.xls"))
-## Print out the significant (FDR > 0.05) gene sets from the GSEA analysis, ordered by NES
-ABC_GSEA %>% subset(FDR.q.val < 0.1) %>% arrange(- NES) %>% droplevels.data.frame() %>%  
+## Print out the significant (FDR.q.val <= 0.1) gene sets from the GSEA analysis, ordered by NES
+ABC_GSEA %>% subset(FDR.q.val <= 0.1) %>% arrange(- NES) %>% droplevels.data.frame() %>%  
         write.xlsx("GSEA/SigPathways.xlsx", sheetName="ABC")
-## subset(GCB_GSEA, FDR.q.val <= 0.1 & NES > 0)
-GCB_GSEA %>% subset(FDR.q.val < 0.1) %>% arrange(- NES) %>% droplevels.data.frame() %>%
+## subset(GCB_GSEA, FDR.q.val <= 0.1)
+GCB_GSEA %>% subset(FDR.q.val <= 0.1) %>% arrange(- NES) %>% droplevels.data.frame() %>%
         write.xlsx("GSEA/SigPathways.xlsx", sheetName="GCB", append=TRUE)
 ## Venn diagram of enriched gene sets
 GSEA_Up_Venn <- ggvenn::ggvenn(list("ABC" = c(ABC_GSEA %>% subset(FDR.q.val <= 0.1 & NES > 0) %>% droplevels.data.frame() %>% .[,"NAME"]),
@@ -442,8 +442,6 @@ GSEA_Down_Venn <- ggvenn::ggvenn(list("ABC" = c(ABC_GSEA %>% subset(FDR.q.val <=
                                  show_percentage = FALSE,) + 
         labs(title="Reduced at relapse")
 ```
-
-
 
 ## GSEA heatmap
 
