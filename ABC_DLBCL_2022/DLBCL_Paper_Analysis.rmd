@@ -17,38 +17,46 @@ for ( package in packages ) {
     }
 }
 ## Function to calculate the Linear Predictor 
-GenerateLinearPredictor <- function( betas , ExprSet, scale = TRUE, cutoff = FALSE) {
+GenerateLinearPredictor <-
+    function(betas ,
+             ExprSet,
+             scale = TRUE,
+             cutoff = FALSE) {
         ## filter the betas down to only those in ExprSet
         betas <- betas[names(betas) %in% featureNames(ExprSet)]
         ## Filter the ExprSet down to the remaining beta genes
-        FinObject <- ExprSet[names(betas),]
+        FinObject <- ExprSet[names(betas), ]
         ## Store betas
         fData(FinObject)$betas <- betas
         ## It's important that these are now ordered exactly the same.
         ## Multiply the expression of the genes by the beta values.
         FinObject$LinearPredictor <- colSums(sweep(exprs(FinObject),
-                                                   MARGIN=1,
-                                                   fData(FinObject)$betas,`*`))
-        if ( scale ) {
+                                                   MARGIN = 1,
+                                                   fData(FinObject)$betas, `*`))
+        if (scale) {
             ## scale generates a zscore
-            FinObject$LinearPredictor <- scale(FinObject$LinearPredictor)
+            FinObject$LinearPredictor <-
+                scale(FinObject$LinearPredictor)
         }
-        ## Run a quick look taking the median value
-        FinObject$MedianGroups <- ifelse(FinObject$LinearPredictor > median(FinObject$LinearPredictor), "High Risk", "Low Risk")
         ## Split groups based on the cut off supplied
-        if ( is.numeric(cutoff) ) {
-            FinObject$BestGroup <- cut(FinObject$LinearPredictor, breaks = c(-Inf, cutoff , Inf), labels = c("Low", "High"))
+        if (is.numeric(cutoff)) {
+            FinObject$BestGroup <-
+                cut(
+                    FinObject$LinearPredictor,
+                    breaks = c(-Inf, cutoff , Inf),
+                    labels = c("Low", "High")
+                )
         }
         FinObject
-}
-theme_set(theme_classic(base_size = 10,
-                            base_family = 'helvetica'))
+    }
+## Colours for plots
 Colours <- c("Diagnosis" = "#70ad47",
              "Relapse" = "#a50021",
              "ABC"="#5b9bd5",
              "GCB"="#ed7d31",
              "UNC"="#b5b3b3",
-             "Unclassified"="#b5b3b3"
+             "Unclassified"="#b5b3b3",
+             "NA" = "black"
              )
 Cohort_Colours <- c("Diagnosis" = "#70ad47",
                     "Relapse" = "#a50021",
@@ -56,7 +64,7 @@ Cohort_Colours <- c("Diagnosis" = "#70ad47",
                     "GCB"="#ed7d31",
                     "Unclassified"="#b5b3b3",
                     "Nodal" = "darkorchid4",
-                    "Extra-nodal" = "darkgoldenrod2",
+                    "Extranodal" = "darkgoldenrod2",
                     "NA" = "Black",
                     ">2y" = "#ffd966",
                     "<2y" = "#806000",
@@ -79,39 +87,11 @@ These data were put together in the DLBCL_Paired_Relapse_Data_Creation.Rmd noteb
 Data <- list()
 ## This has been slightly updated
 Data$PairsData <- readRDS("RDS/rrDLBCL.batchCorrected.eSet.rds")
-
-Discord <- pData(Data$PairsData) %>%
-    pivot_wider(id_cols = PatID, names_from = Timepoint, values_from = COO) %>%
-    subset(Diagnosis != Relapse)
-
-
-pData(Data$PairsData) %>% 
-    subset(PatID %in% Discord$PatID) %>%
-    pivot_wider(id_cols = PatID, names_from = Timepoint, values_from = Nodal)
-
-
-
-pData(Data$PairsData)
-summary(Data$PairsData$Relapse_Time) 
+## Discordant Pairs
 pData(Data$PairsData) %>%
-    pivot_wider(PatID, names_from = Timepoint, values_from = Nodal) %>%
-    column_to_rownames("PatID") %>%
-    table()
-
-table(pData(Data$PairsData) %>%
-    subset(Timepoint == "Diagnosis") %>%
-    .$TREATMENT)
-## Output for GEO
-dir.create("DataStore")
-Data$PairsData %>% exprs() %>% write.table("DataStore/all_batchCorrectedCounts.txt", sep = "\t", quote = FALSE, col.names = NA)
-raw <- readRDS("RDS/rrDLBCL.raw.eSet.rds")
-raw %>% exprs() %>% write.table("DataStore/all_rawCounts.txt", sep = "\t", quote = FALSE, col.names = NA)
-lapply(colnames(raw), function(col) {
-    raw[,col] %>% exprs() %>% write.table(paste("DataStore/", col, "_rawCounts.txt", sep = ""), sep = "\t", quote = FALSE, col.names = NA)
-})
-
-raw[12134,24] %>% exprs()
-
+    pivot_wider(id_cols = PatID, names_from = Timepoint, values_from = COO) %>%
+    subset(Diagnosis != Relapse) %>%
+    arrange(Diagnosis)
 ```
 
 # Table 1
@@ -128,26 +108,23 @@ CohortData <- list(
         summary(), 
     Sex = subset(pData(Data$PairsData), Timepoint == "Diagnosis", select = Sex) %>%
         table(),
-    COO_Diagnosis = subset(pData(Data$PairsData), Timepoint == "Diagnosis", select = COO) %>%
+    Coo = subset(pData(Data$PairsData), select = c(COO, PatID, Timepoint)) %>%
+        subset(COO != "NA") %>%
+        pivot_wider(id_cols = PatID, names_from = Timepoint, values_from = COO) %>%
+        column_to_rownames("PatID") %>%
         table(),
-    COO_Relase = subset(pData(Data$PairsData), Timepoint == "Relapse", select = COO) %>%
+    Site = subset(pData(Data$PairsData), select = c(Nodal, PatID, Timepoint)) %>%
+        mutate(Nodal = ifelse(Nodal, "Nodal", "Extranodal")) %>%
+            mutate(Nodal = factor(Nodal, levels = c("Nodal", "Extranodal"))) %>% 
+        pivot_wider(id_cols = PatID, names_from = Timepoint, values_from = Nodal) %>%
+        column_to_rownames("PatID") %>%        
         table(),
-    COO_Stable = {x <- pivot_wider(
-        pData(Data$PairsData), id_cols = PatID, names_from = Timepoint, values_from = c("COO"))
-    cbind(ABC = sum(x$Diagnosis == "ABC" & x$Relapse == "ABC"),
-          GCB = sum(x$Diagnosis == "GCB" & x$Relapse == "GCB"),
-          UNC = sum(x$Diagnosis == "UNC" & x$Relapse == "UNC")) },
-    Site_Diagnosis = subset(pData(Data$PairsData), Timepoint == "Diagnosis", select = Nodal) %>%
-        table(),
-    Site_Relase = subset(pData(Data$PairsData), Timepoint == "Relapse", select = Nodal) %>%
-        table(),
-    Site_Stable = {x <- pivot_wider(
-        pData(Data$PairsData), id_cols = PatID, names_from = Timepoint, values_from = c("Nodal"))
-    cbind(Nodal = sum(x$Diagnosis == TRUE & x$Relapse == TRUE),
-          ExtraNodal = sum(x$Diagnosis != TRUE & x$Relapse != TRUE))},
     TreatmentResponse = subset(pData(Data$PairsData), Timepoint == "Diagnosis", select = Response) %>%
-        table()
+        table(),
+    Treatment = table(subset(pData(Data$PairsData), Timepoint == "Diagnosis", select = TREATMENT))
 )
+CohortData
+subset(pData(Data$PairsData), Timepoint == "Diagnosis" & Relapse_Time > 10)
 ```
 
 
@@ -159,18 +136,21 @@ CohortData <- list(
 Creating a plot of the characteristics of the Cohort 
 
 ```{r}
+## Bind the data to the name of that row
 Cohort <- rbind(cbind(pData(Data$PairsData)["Timepoint"],"Timepoint") %>% 
                     setNames(c("val","yaxis")) %>% 
                     rownames_to_column(var="sample"),
                 cbind(pData(Data$PairsData)["COO"],"COO") %>% 
                     setNames(c("val", "yaxis")) %>% 
                     rownames_to_column(var="sample"),
+                ## If less that 2 years  <2y if greater than 2 years  >2y
                 cbind(ifelse(pData(Data$PairsData)["Relapse_Time"] < 2,"<2y",">2y"),"Relapse Time") %>% as.data.frame() %>%
                     setNames(c("val", "yaxis")) %>%
                     rownames_to_column(var="sample"),
                 cbind(pData(Data$PairsData)["Response"],"Response") %>% 
                     setNames(c("val", "yaxis")) %>% 
                     rownames_to_column(var="sample"),
+                ## Break age at diagnosis up into 0-50, 50-60, 60-70, 70+
                 cbind(pData(Data$PairsData) %>% 
                           subset(.,Timepoint == "Diagnosis") %>% 
                           .["Age"] %>% unlist() %>%
@@ -183,15 +163,15 @@ Cohort <- rbind(cbind(pData(Data$PairsData)["Timepoint"],"Timepoint") %>%
                           'rownames<-'(sampleNames(Data$PairsData)),"Age") %>% 
                     setNames(c("val", "yaxis")) %>%
                     rownames_to_column(var="sample"),
-                cbind(ifelse(pData(Data$PairsData)["Nodal"] == TRUE, "Nodal", "Extra-nodal") %>% as.data.frame(),
-                      "Nodal/Extra Nodal") %>% 
+                cbind(ifelse(pData(Data$PairsData)["Nodal"] == TRUE, "Nodal", "Extranodal") %>% as.data.frame(),
+                      "Nodal/extranodal") %>% 
                     setNames(c("val", "yaxis")) %>%
                     rownames_to_column(var="sample"),
                 cbind(pData(Data$PairsData)["Sex"],"Gender") %>%
                     setNames(c("val", "yaxis")) %>% 
                     rownames_to_column(var="sample")) %>%
     ggplot(data=.,aes(x=sample, y=factor(yaxis,
-                                         levels=rev(c("Timepoint","COO","Nodal/Extra Nodal","Relapse Time","Gender","Age","Response"))),
+                                         levels=rev(c("Timepoint","COO","Nodal/extranodal","Relapse Time","Gender","Age","Response"))),
                       fill=factor(val, levels=names(Cohort_Colours)))) +
     labs(y="", x="") +
     geom_tile() + 
@@ -235,7 +215,7 @@ cooKey <- get_legend(
                 fill = Name
             )
         ) +
-        scale_fill_manual(values = Cohort_Colours[3:5], name = "COO") + CohortLegTheme
+        scale_fill_manual(values = Cohort_Colours[c(3:5,8)], name = "COO") + CohortLegTheme
 )
 nodeKey <- get_legend(
     ggplot() +
@@ -247,7 +227,7 @@ nodeKey <- get_legend(
                 fill = Name
             )
         ) +
-        scale_fill_manual(values = Cohort_Colours[6:7], name = "Nodal/Extra Nodal")  + CohortLegTheme
+        scale_fill_manual(values = Cohort_Colours[6:7], name = "Nodal/Extranodal")  + CohortLegTheme
 )
 t2rKey <- get_legend(
     ggplot() +
@@ -313,31 +293,49 @@ Cohort <-
     )) + plot_layout(heights = c(4, 1))
 ```
 
+
+
 ## Alluvial Diagram of COO
 
 ```{r message=FALSE, echo=FALSE, warning=FALSE}
 ## COO stability
-COOStability <- spread(pData(Data$PairsData)[,c("Timepoint","COO","PatID")], Timepoint, COO )
-COOStability$Diagnosis <- ifelse(COOStability$Diagnosis == "Unclassified", "UNC", COOStability$Diagnosis %>% as.character())
-COOStability$Relapse <- ifelse(COOStability$Relapse == "Unclassified", "UNC", COOStability$Relapse %>% as.character())
+COOStability <-
+    spread(pData(Data$PairsData)[, c("Timepoint", "COO", "PatID")], Timepoint, COO) %>%
+    subset(Diagnosis != "NA" & Relapse != "NA")
+COOStability$Diagnosis <-
+    ifelse(
+        COOStability$Diagnosis == "Unclassified",
+        "UNC",
+        COOStability$Diagnosis %>% as.character()
+    )
+COOStability$Relapse <-
+    ifelse(
+        COOStability$Relapse == "Unclassified",
+        "UNC",
+        COOStability$Relapse %>% as.character()
+    )
 ## Diag-Relapse COO data.frame
-COOStability <- melt(table(COOStability[,c("Diagnosis","Relapse")]))
+COOStability <- melt(table(COOStability[, c("Diagnosis", "Relapse")]))
 ## Set the levels so that the UNC sits between ABC and GCB
-COOStability$Diagnosis <- factor(COOStability$Diagnosis, levels=c("ABC","UNC","GCB"))
+COOStability$Diagnosis <-
+    factor(COOStability$Diagnosis, levels = c("ABC", "UNC", "GCB"))
 COO <- ggplot(subset(COOStability, value != 0),
-              aes(y=value, axis1 = Diagnosis, axis2=Relapse)) +
+              aes(y = value, axis1 = Diagnosis, axis2 = Relapse)) +
     ## Fill with the COO at diagnosis.
-    geom_alluvium(aes(fill = Diagnosis, width=1/12)) +
-    geom_stratum(width = 1/12, alpha = .05) +
-    scale_fill_manual(values=Colours) +
-    scale_x_discrete(limits = c("Diagnosis", "Relapse"), expand = c(.05, .05)) +
-    theme(axis.line.y = element_blank(),
-          axis.ticks.y = element_blank(),
-          axis.title.y = element_blank(),
-          axis.text.y = element_blank(),
-          axis.text.x = element_text(size=12),
-          legend.position = "none") +
-        geom_label(stat = "stratum", aes(label = after_stat(stratum)))
+    geom_alluvium(aes(fill = Diagnosis, width = 1 / 12)) +
+    geom_stratum(width = 1 / 12, alpha = .05) +
+    scale_fill_manual(values = Colours) +
+    scale_x_discrete(limits = c("Diagnosis", "Relapse"),
+                     expand = c(.05, .05)) +
+    theme(
+        axis.line.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 12),
+        legend.position = "none"
+    ) +
+    geom_label(stat = "stratum", aes(label = after_stat(stratum)))
 ```
 
 ## PCA plot of normalised batch corrected Data
@@ -349,7 +347,7 @@ PCA_Timepoint <- biplot(pca,
                         gridlines.major = FALSE, 
                         gridlines.minor = FALSE,
                         pointSize = 3, 
-                        lab= FALSE ) +
+                        lab= NA ) +
         scale_color_manual(name="",values=Colours[1:2]) +
         theme_classic() +
         theme(legend.position = "bottom",
@@ -360,22 +358,56 @@ PCA_COO <- biplot(pca,
                   colby = "COO", 
                   gridlines.major = FALSE, gridlines.minor = FALSE,
                   pointSize = 3, 
-                  lab= FALSE ) +
-        scale_color_manual(name="",values=Colours[3:5]) +
+                  lab= NA ) +
+        scale_color_manual(name="",values=Colours[c(3:5,7)]) +
         theme_classic() +
         theme(legend.position = "bottom",
               legend.direction = "horizontal")
 PCA <- (PCA_Timepoint + PCA_COO )
 ```
 
-## GSEA Venn Diagrams from DEG
+# DEG and GSEA
+
+Create a column to indicate ABC-ABC and GCB-GCB pairs
+
+```{r}
+## Get Pat ID for samples that are ABC at both diagnosis and relapse
+ABC_Pairs <- pData(Data$PairsData) %>%
+    pivot_wider(id_cols = PatID,
+                names_from = Timepoint,
+                values_from = COO) %>%
+    subset(Diagnosis == "ABC" & Relapse == "ABC") %>%
+    .$PatID
+## Get Pat ID for samples that are GCB at both diagnosis and relapse
+GCB_Pairs <- pData(Data$PairsData) %>%
+    pivot_wider(id_cols = PatID,
+                names_from = Timepoint,
+                values_from = COO) %>%
+    subset(Diagnosis == "GCB" & Relapse == "GCB") %>%
+    .$PatID
+## Get Pat ID for samples that are NA at either diagnosis and relapse
+NA_Pairs <- pData(Data$PairsData) %>%
+    pivot_wider(id_cols = PatID,
+                names_from = Timepoint,
+                values_from = COO) %>%
+    subset(Diagnosis == "NA" | Relapse == "NA") %>%
+    .$PatID
+Data$PairsData$PairCOO <-
+    ifelse(
+        Data$PairsData$PatID %in% ABC_Pairs,
+        "ABC",
+        ifelse(
+            Data$PairsData$PatID %in% GCB_Pairs,
+            "GCB",
+            ifelse(Data$PairsData$PatID %in% NA_Pairs, "NA", "UNC")
+        )
+    )
+```
 
 ```{r}
 ABC <- Data$PairsData[,Data$PairsData$PairCOO == "ABC"]
-## Build the design, with diagnosis as the intercept.
-## Pair samples by PatID in the design
-## Then assess the differences at relapse (Timepoint)
-ABC_design <- model.matrix(~as.factor(as.vector(ABC$PatID))+ABC$Timepoint)
+## Build the design
+ABC_design <- model.matrix(~ABC$PatID+ABC$Timepoint)
 ## DGE
 ABC_fit <- lmFit(exprs(ABC), ABC_design)
 ABC_fit <- eBayes(ABC_fit)
@@ -384,10 +416,8 @@ ABC_FoldChange <- topTable(ABC_fit,
                            coef=ncol(ABC_design))
 ## GCB analysis
 GCB <- Data$PairsData[,Data$PairsData$PairCOO == "GCB"]
-## Build the design, with diagnosis as the intercept.
-## Pair samples by PatID in the design
-## Then assess the differences at relapse (Timepoint)
-GCB_design <- model.matrix(~as.factor(as.vector(GCB$PatID))+GCB$Timepoint)
+## Build the design
+GCB_design <- model.matrix(~GCB$PatID+GCB$Timepoint)
 ## DGE
 GCB_fit <- lmFit(exprs(GCB), GCB_design)
 GCB_fit <- eBayes(GCB_fit)
@@ -395,20 +425,20 @@ GCB_FoldChange <- topTable(GCB_fit,
                            n=Inf,
                            coef=ncol(GCB_design))
 ## Export genes for GSEA, using the t_statistic as the ranking variable
-cbind(rownames(ABC_FoldChange),
-      ABC_FoldChange$t) %>% 
-        as.data.frame() %>%
-        setNames(c("#Probe Set ID","t_statistic")) %>%
-        arrange(., t_statistic %>% as.character() %>% as.numeric() %>% -.) %>%
+ABC_FoldChange %>% 
+    select(t) %>% 
+    arrange(-t) %>% 
+    setNames(c("t_statistic")) %>%
+    rownames_to_column("#Probe Set ID") %>%
         write.table("GSEA/ABC_Limma.rnk",
                     quote=FALSE,
                     row.names = FALSE,
                     sep="\t")
-cbind(rownames(GCB_FoldChange),
-      GCB_FoldChange$t) %>% 
-        as.data.frame() %>%
-        setNames(c("#Probe Set ID","t_statistic")) %>%
-        arrange(., t_statistic %>% as.character() %>% as.numeric() %>% -.) %>%
+GCB_FoldChange %>% 
+    select(t) %>% 
+    arrange(-t) %>% 
+    setNames(c("t_statistic")) %>%
+    rownames_to_column("#Probe Set ID") %>%
         write.table("GSEA/GCB_Limma.rnk",
                     quote=FALSE,
                     row.names = FALSE,
@@ -447,7 +477,6 @@ GSEA_Down_Venn <- ggvenn::ggvenn(list("ABC" = c(ABC_GSEA %>% subset(FDR.q.val <=
 
 ```{r}
 GSEA <- read.xlsx("GSEA/rrDLBCL_pairs_GSEA.xlsx", sheetName = "For Alex")
-subset(GSEA, FDR.q.val.ABC <= 0.1 & FDR.q.val.GCB <= 0.1 & sign(NES.ABC) == sign(NES.GCB))
 ## chromosome maintenance, DNA repair, and rRNA processing 
 ABC_GSEA <- subset(GSEA, NAME %in% c(
         "REACTOME_DNA_METHYLATION",
@@ -548,7 +577,6 @@ GESA_heatmap <- ( ABC_GSEA_Heatmap |  GCB_GSEA_Heatmap ) + plot_layout(guides="c
 ## PAMR for ABC genes
 
 ```{r}
-library(pamr)
 REDDY <- list()
 REDDY$Data <- readRDS("RDS/ExternalDataset/Reddy.Processed.ABC.rds")
 ## Relaxed cut offs for PAMR genes
@@ -652,35 +680,25 @@ GenePlot <- ggplot(GeneInfo,
           axis.text = element_text(size=10),
           axis.title = element_text(size=12))
 PAMR <- ReddyTrainSurv + GenePlot + plot_layout(widths=c(4,1))
-saveRDS(betas, "RDS/ABC_predictor_betas.rds")
 ```
 
 
 ## Figure 1 panels
 
 ```{r}
-if (! dir.exists("Figures/Paper_Figures") ) {dir.create("Figures/Paper_Figures")}
 ## A
 Cohort
-ggsave("Figures/Paper_Figures/Figure1-A-Cohort.svg", width=5, height=3)
-## Legend made with w=9, h=5
 ## B
 COO
-ggsave("Figures/Paper_Figures/Figure1-B-COO.svg", width=5, height=3)
 ## C
 PCA
-ggsave("Figures/Paper_Figures/Figure1-C-PCA.svg", width=7, height=4)
 ## D
 GSEA_Up_Venn
-ggsave("Figures/Paper_Figures/Figure1-D-GSEA-UP.svg", width=5, height=3)
 GSEA_Down_Venn
-ggsave("Figures/Paper_Figures/Figure1-D-GSEA-DOWN.svg", width=5, height=3)
 ## E
-GESA_heatmap <- ( ABC_GSEA_Heatmap |  GCB_GSEA_Heatmap ) + plot_layout(guides="collect")
-ggsave("Figures/Paper_Figures/Figure1-E-GSEA_heatmap.svg", height=4, width = 8)
+(ABC_GSEA_Heatmap |  GCB_GSEA_Heatmap ) + plot_layout(guides="collect")
 ## F
 PAMR
-ggsave("Figures/Paper_Figures/Figure1-F-PAMR.svg", width=5, height=3)
 ```
 
 ## Supplemental Figure 1
@@ -722,19 +740,6 @@ Sup1E <- ggvenn::ggvenn(list(ABC = subset(ABC_FoldChange, P.Value <= 0.05) %>% r
                         show_percentage = FALSE)
 Sup1F1 <- Volcano::volcanoPlot(ABC_FoldChange, SigName = "P.Value", FCName = "logFC", fcThres = 2, pThres = 0.01, PRINT = FALSE)
 Sup1F2 <- Volcano::volcanoPlot(GCB_FoldChange, SigName = "P.Value", FCName = "logFC", fcThres = 2, pThres = 0.01, PRINT = FALSE)
-
-Genes  <- c(ABC_FoldChange %>% subset(P.Value <= 0.05) %>% rownames(), 
-            GCB_FoldChange %>% subset(P.Value <= 0.05) %>% rownames()) %>% unique()
-length(Genes)
-cbind(Gene = Genes,
-      ABC = ABC_FoldChange %>% .[Genes,"logFC"],
-      GCB = GCB_FoldChange %>% .[Genes,"logFC"]) %>%
-    as.data.frame() %>%
-    ggplot(aes(x = as.numeric(ABC), y = as.numeric(GCB))) + 
-    geom_point() + 
-    geom_smooth(method = "lm", linetype = "dashed", col = "red", ) + 
-    stat_cor()
-
 ## G
 Sup1G <- ggvenn::ggvenn(list(ABC = subset(ABC_FoldChange, P.Value <= 0.01 & abs(logFC) > 1) %>% row.names(),
                              GCB = subset(GCB_FoldChange, P.Value <= 0.01 & abs(logFC) > 1) %>% row.names()),
@@ -742,6 +747,18 @@ Sup1G <- ggvenn::ggvenn(list(ABC = subset(ABC_FoldChange, P.Value <= 0.01 & abs(
                         fill_alpha = 0.3,
                         stroke_color = "grey",
                         show_percentage = FALSE)
+```
+
+```{r}
+Sup1A
+Sup1B
+Sup1C
+Sup1D1
+Sup1D2
+Sup1E
+Sup1F1
+Sup1F2
+Sup1G
 ```
 
 # Load in the testing cohorts
@@ -753,8 +770,6 @@ Predictor <- names(betas)
 REMoDLB <- readRDS("RDS/ExternalDataset/REMoDLB.Processed.ABC.rds")
 HMRN <- readRDS("RDS/ExternalDataset/HMRN.Processed.rds")
 LLMPP <- readRDS("RDS/ExternalDataset/LLMPP.Processed.ABC.RCHOP.rds")
-
-pData(LLMPP)
 ```
 
 ## Generating Z score predictors
@@ -765,7 +780,6 @@ REMoDLB_Fil <- GenerateLinearPredictor(betas, REMoDLB)
 REMoDLB_Fil$BestGroup <- ifelse(REMoDLB_Fil$LinearPredictor <= CutOff, "Low", "High")
 REMoDLB_Fil$OS_TIME_Trunc <- ifelse(REMoDLB_Fil$OS_TIME > 3, 3, REMoDLB_Fil$OS_TIME)
 REMoDLB_Fil$OS_IND_Trunc <- ifelse(REMoDLB_Fil$OS_TIME > 3, 0, REMoDLB_Fil$OS_IND)
-# REMoDLB_Fil <- FindBestCuttoff(REMoDLB_Fil)
 REMoDLB_Annot <- data.frame(x=c(4.5,4.5),
                             y=c(0.775,0.925),
                             x_trunc=c(2.75, 2.75),
@@ -889,7 +903,6 @@ HMRN_Full <- ggsurvplot(survfit(Surv(OS_TIME, OS_IND) ~ BestGroup,
                         pval = TRUE,
                         pval.method = TRUE,
                         pval.size=4,
-                        log.rank.weights = "n",
                         surv.median.line	= "hv",
                         ylab="Overall Survival",
                         xlab = "Follow up time (years)")$plot +
@@ -930,27 +943,96 @@ HMRN_3year <- ggsurvplot(survfit(Surv(OS_TIME_Trunc, OS_IND_Trunc) ~ BestGroup,
         theme(legend.position = "none")
 ```
 
+
+## IPI and Lacy class
+
+```{r}
+IPI <- pData(REMoDLB_Fil) %>% 
+    ggplot(aes(x = BestGroup, fill = as.character(IPI_SCORE))) +
+    geom_bar(position = "fill") + 
+    scale_y_continuous(labels = scales::percent) +
+    labs(x = "Risk Group", y = "", fill = "IPI")+
+    theme_classic() +
+    theme(legend.position = "bottom",
+          legend.title = element_text(size=8), 
+          legend.text=element_text(size=8),legend.key.size = unit(4, "mm"))
+table(REMoDLB_Fil$IPI, REMoDLB_Fil$BestGroup) %>% fisher.test()
+## Compare the HMRN risk groups to the LACY class.
+ColoursGenomic <- c(
+        ## Same Groups
+        "MCD" = "firebrick",
+        "MYD88" = "firebrick",
+        ## Mix of MCD and ST2
+        "MCD/ST2" = "red",
+        ## Same Groups
+        "BCL2" = "goldenrod",
+        "EZB" = "goldenrod",
+        ## Same Groups
+        "BN2" = "chartreuse3",
+        "NOTCH2" = "chartreuse3",
+        ## No match
+        "ST2" = "orchid3",
+        ## No match
+        "N1" = "skyblue",
+        ## No match
+        "SOCS1/SGK1" = "gold",
+        ## No match
+        "TET2/SGK1" = "slateblue3",
+        ## Both have others make them gray
+        "Other" = "gray83")
+
+LACY <- pData(HMRN_Fil) %>% 
+        subset(! is.na(Lacy_class)) %>%
+        select(BestGroup,Lacy_class) %>%
+        ggplot(aes(x = gsub(" Risk", "", BestGroup), fill = Lacy_class)) +
+        geom_bar(position = "fill") +
+        scale_fill_manual(values=ColoursGenomic[levels(as.factor(HMRN$Lacy_class))], 
+                          guide = guide_legend(title.position = "top",
+                                               title.hjust = 0.5,
+                                               title.theme = element_text(size=8),
+                                               label.theme = element_text(size=6),
+                                               keywidth = 0.5,
+                                               keyheight = 0.5),
+                          drop = TRUE) +
+        scale_y_continuous(labels = scales::percent) +
+        labs(x = "Risk Group", y = "") +
+        theme_classic() +
+        theme(legend.position = "bottom",
+              legend.title = element_text(size=8), 
+              legend.text=element_text(size=8),legend.key.size = unit(4, "mm"))
+pData(HMRN_Fil) %>% 
+        subset(! is.na(Lacy_class)) %>%
+        select(BestGroup,Lacy_class) %>%
+    table() %>%
+    fisher.test()
+```
+
+
+
+
+# Figure 2
+
+```{r}
+## REMoDLB
+REMoDLB_3year
+## LLMPP
+LLMPP_3year
+## HMRN
+HMRN_3year
+##
+IPI
+##
+LACY
+```
+
 ## Cause of death in HMRN cohort
 
 ```{r}
 CauseOfDeath <- read.xlsx("HMRN/COD_2021_10_10.xlsx", sheetIndex = 1) %>%
     setNames(c("DASL_ID", "COD")) %>% 
     subset(! DASL_ID %>% duplicated())
-HMRN_Fil_x <- HMRN_Fil
-
 pData(HMRN_Fil) <- left_join(pData(HMRN_Fil), CauseOfDeath)
-
-
-ggsurvplot(survfit(Surv(OS_TIME, OS_IND) ~ COD,
-                   data=pData(HMRN_Fil)),
-           pval = TRUE,
-           pval.method = TRUE,
-           pval.size=4,
-           surv.median.line	= "hv",
-           ylab="Overall Survival",
-           xlab = "Follow up time (years)")
-
-pData(HMRN_Fil) %>%
+HMRN_COD <- pData(HMRN_Fil) %>%
         subset(OS_IND == 1) %>%
         ggplot(aes(x = COD ,y = OS_TIME)) + 
         geom_boxplot(outlier.alpha = 0) + 
@@ -958,44 +1040,19 @@ pData(HMRN_Fil) %>%
         labs(x = "Cause of death", y = "follow up time") +
         geom_jitter() +
         geom_hline(yintercept = 3, linetype = "dashed", colour = "red")
-ggsave("Figures/Paper_Figures/HMRN.cause.of.death.png", width = 4, height = 3)
-ggsave("Figures/Paper_Figures/HMRN.cause.of.death.svg", width = 4, height = 3)
-table(HMRN_Fil$OS_TIME > 1, HMRN_Fil$COD)
-table(HMRN_Fil$OS_TIME > 2, HMRN_Fil$COD)
-table(HMRN_Fil$OS_TIME > 3, HMRN_Fil$COD)
-table(HMRN_Fil$OS_TIME > 4, HMRN_Fil$COD)
-table(HMRN_Fil$OS_TIME > 5, HMRN_Fil$COD)
-
-
-42/(42+13)
-6/(6+31)
 ```
 
-
-# Testing cohort Figures (2 - 3 year, Supp 3 Full)
+## Supplemental Figure 3
 
 ```{r}
 ## REMoDLB
-## 3 year
-REMoDLB_3year
-ggsave("Figures/Paper_Figures/Figure2-REMoDLB.threeyear.svg", width = 7, height = 4)
-## Full
 REMoDLB_Full
-ggsave("Figures/Paper_Figures/SupplementalFigure2-REMoDLB.svg", width = 7, height = 4)
 ## LLMPP
-## 3 year
-LLMPP_3year
-ggsave("Figures/Paper_Figures/Figure2-LLMPP.threeyear.svg", width = 7, height = 4)
-## Full
 LLMPP_Full
-ggsave("Figures/Paper_Figures/SupplementalFigure2-LLMPP.svg", width = 7, height = 4)
 ## HMRN
-## 3 year
-HMRN_3year
-ggsave("Figures/Paper_Figures/Figure2-HMRN.threeyear.svg", width = 7, height = 4)
-## Full
 HMRN_Full
-ggsave("Figures/Paper_Figures/SupplementalFigure2-HMRN.svg", width = 7, height = 4)
+## Cause of Death in HMRN
+HMRN_COD
 ```
 
 ## Survival Stats for the paper
@@ -1027,16 +1084,6 @@ coxph(Surv(OS_TIME, OS_IND) ~ (BestGroup == "High"),
 ## Multivariate analysis
 
 ```{r}
-
-coxph(Surv(OS_TIME, OS_IND) ~ (BestGroup == "High") +
-              as.numeric(AGE) + 
-              (GENDER == "Male") + 
-              (IPI_SCORE > 2) + 
-              (grepl("III|IV", STAGE)),
-                    data=pData(REMoDLB_Fil)) %>% summary()
-
-
-pData(LLMPP)
 rbind(cbind(Dataset = "REMoDLB",
       coxph(Surv(OS_TIME, OS_IND) ~ (BestGroup == "High") + 
               as.numeric(AGE) + 
@@ -1055,73 +1102,7 @@ rbind(cbind(Dataset = "REMoDLB",
                     data=pData(LLMPP_Fil)) %>%
                       summary() %>% 
                       .$coefficients %>% 
-                      as.data.frame())) %>%
-        xlsx::write.xlsx("SpreadSheets/MultiVariate.xlsx", "Sheet1")
-```
-
-## Genomic Testing
-
-```{r}
-ColoursGenomic <- c(
-        ## Same Groups
-        "MCD" = "firebrick",
-        "MYD88" = "firebrick",
-        ## Mix of MCD and ST2
-        "MCD/ST2" = "red",
-        ## Same Groups
-        "BCL2" = "goldenrod",
-        "EZB" = "goldenrod",
-        ## Same Groups
-        "BN2" = "chartreuse3",
-        "NOTCH2" = "chartreuse3",
-        ## No match
-        "ST2" = "orchid3",
-        ## No match
-        "N1" = "skyblue",
-        ## No match
-        "SOCS1/SGK1" = "gold",
-        ## No match
-        "TET2/SGK1" = "slateblue3",
-        ## Both have others make them gray
-        "Other" = "gray83")
-pData(HMRN_Fil) %>% 
-        subset(! is.na(Lacy_class)) %>%
-        select(BestGroup,Lacy_class) %>%
-        ggplot(aes(x = gsub(" Risk", "", BestGroup), fill = Lacy_class)) +
-        geom_bar(position = "fill") +
-        scale_fill_manual(values=ColoursGenomic[levels(as.factor(HMRN$Lacy_class))], 
-                          guide = guide_legend(title.position = "top",
-                                               title.hjust = 0.5,
-                                               title.theme = element_text(size=8),
-                                               label.theme = element_text(size=6),
-                                               keywidth = 0.5,
-                                               keyheight = 0.5),
-                          drop = TRUE) +
-        scale_y_continuous(labels = scales::percent) +
-        labs(x = "Risk Group", y = "") +
-        theme_classic() +
-        theme(legend.position = "bottom",
-              legend.title = element_text(size=8), 
-              legend.text=element_text(size=8),legend.key.size = unit(4, "mm"))
-ggsave("Figures/Paper_Figures/SupplementalFigure3_Genomics.svg", height = 4, width = 2)
-
-table(is.na(HMRN_Fil$Lacy_class))
-table(HMRN_Fil$BestGroup, HMRN_Fil$Lacy_class) %>% fisher.test()
-table(HMRN_Fil$BestGroup, HMRN_Fil$Lacy_class)
-table(HMRN_Fil$BestGroup)
-
-  
-pData(REMoDLB_Fil) %>% 
-    ggplot(aes(x = BestGroup, fill = as.character(IPI_SCORE))) +
-    geom_bar(position = "fill") + 
-    scale_y_continuous(labels = scales::percent) +
-    labs(x = "Risk Group", y = "", fill = "IPI")+
-    theme_classic() +
-    theme(legend.position = "bottom",
-          legend.title = element_text(size=8), 
-          legend.text=element_text(size=8),legend.key.size = unit(4, "mm"))
-ggsave("Figures/Paper_Figures/SupplementalFigure3_IPI.svg", height = 4, width = 2)
-table(REMoDLB_Fil$IPI, REMoDLB_Fil$BestGroup) %>% fisher.test()
+                      as.data.frame()))
 ```
 
 ## Random
@@ -1152,17 +1133,19 @@ random <- readRDS("RDS/Random/Random_all.zscore.rds")
 x <- coxph(Surv(OS_TIME, OS_IND) ~ BestGroup == "High",data=pData(REMoDLB_Fil))
 REMoDLB_HR <- exp(x$coefficients)
 y <- summary(x)
-REMoDLB_P <- y$sctest[3]
+## % that have a lower HR than our signature
 table(random$Stats$REMoDLB_HR >= REMoDLB_HR)
-table(random$Stats$REMoDLB_P <= REMoDLB_P)
+100 - 13491/300000 * 100
 ## LLMPP
 x <- coxph(Surv(OS_TIME, OS_IND) ~ BestGroup == "High",data=pData(LLMPP_Fil))
 LLMPP_HR <- exp(x$coefficients)
 y <- summary(x)
-LLMPP_P <- y$sctest[3]
+## % that have a lower HR than our signature
 table(random$Stats$LENZ_HR >= LLMPP_HR)
-table(random$Stats$LENZ_P <= LLMPP_P)
+100 - 5029/300000*100
+## % that have a lower HR than our signature
 table(random$Stats$LENZ_HR >= LLMPP_HR & random$Stats$REMoDLB_HR >= REMoDLB_HR)
+100 - 227/300000*100
 OurCox <- rbind(cbind("LLMPP", LLMPP_HR %>% unname(), 294971),
                 cbind("REMoDL-B", REMoDLB_HR %>% unname(), 286509)) %>%
         as.data.frame() %>%
@@ -1187,8 +1170,6 @@ random$Stats %>%
         labs(y = "HR", x = "Iteration") +
         theme_classic() +
         theme(strip.background = element_blank())
-ggsave("Figures/Paper_Figures/SupplementalFigure3_RandomGeneSets.png", width = 8, height = 4)
-ggsave("Figures/Paper_Figures/SupplementalFigure3_RandomGeneSets.svg", width = 8, height = 4)
 ```
 
 
